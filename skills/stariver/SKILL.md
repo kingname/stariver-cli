@@ -5,15 +5,18 @@ description: Use the installed stariver CLI to work with 渡星河 Chinese metap
 
 # 渡星河 CLI
 
-Call `stariver` instead of reproducing API requests. Never read, print, or ask for the stored token.
+Call `stariver` instead of reproducing API requests. Never read or print an existing stored token. Only ask for a new token when authentication setup is required.
 
 ## Workflow
 
-1. Run `stariver archives list --json` when the user refers to a person by name but has not supplied a person ID.
-2. Run `stariver reports list --json` when a report ID is required. Match the requested person, system, period, and completed status; ask only if multiple plausible reports remain.
-3. Pass complete flags and `--json`. Do not rely on interactive prompts.
-4. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
-5. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
+1. Before the first authenticated command, run `stariver auth status --json`.
+2. If no token is configured or authentication has expired, tell the user: open https://my.stariver.me, register or sign in, click the avatar in the top-right corner, obtain a new token, then send it to the agent for configuration. Wait for the user to provide it.
+3. When the user provides the new token, configure it with `stariver auth set-token --token <token> --json`, verify with `stariver auth status --json`, then continue the original request. Never echo, quote, save it outside the CLI config, or include it in the final response.
+4. Run `stariver archives list --json` when the user refers to a person by name but has not supplied a person ID.
+5. Run `stariver reports list --json` when a report ID is required. Match the requested person, system, period, and completed status; ask only if multiple plausible reports remain.
+6. Pass complete flags and `--json`. Do not rely on interactive prompts.
+7. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
+8. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
 
 ## Command map
 
