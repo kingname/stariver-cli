@@ -31,10 +31,10 @@ if [ "$platform" = "linux" ] && (ldd --version 2>&1 || true) | grep -qi musl; th
 fi
 artifact="stariver-${target}.tar.gz"
 if [ "$RELEASE_TAG" = "latest" ]; then
-  base="https://github.com/${REPOSITORY}/releases/latest/download"
-else
-  base="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}"
+  latest_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${REPOSITORY}/releases/latest")"
+  RELEASE_TAG="${latest_url##*/}"
 fi
+base="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
