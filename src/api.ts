@@ -74,8 +74,13 @@ export class StariverApi {
     let data: string[] = [];
     let type = "message";
     let id = "";
+    let completed = false;
     const flush = () => {
-      if (data.length) onEvent({ type, id, data: data.join("\n") });
+      if (data.length) {
+        const event = { type, id, data: data.join("\n") };
+        if (event.data === "[DONE]") completed = true;
+        onEvent(event);
+      }
       data = [];
       type = "message";
     };
@@ -98,5 +103,6 @@ export class StariverApi {
     buffer += decoder.decode();
     if (buffer) consume(buffer);
     flush();
+    if (!completed) throw new Error("流式响应在完成前中断");
   }
 }

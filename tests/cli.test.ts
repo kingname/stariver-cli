@@ -9,10 +9,17 @@ const server = Bun.serve({
       return Response.json({ success: true, data: { persons: [{ person_id: "p1", name: "甲", birthday: "1990-01-01", shichen: 3, sex: "男" }] } });
     }
     if (url.pathname === "/api/report/query") return Response.json({ success: true, data: [] });
-    if (url.pathname === "/api/tongpan/tasks") return Response.json({ success: true, data: [] });
+    if (url.pathname === "/api/tongpan/tasks") {
+      return Response.json({ success: true, data: [{ task_id: "tp1", report_type: "tongpan", status: "running" }] });
+    }
     if (url.pathname === "/api/ziwei/create") {
       createBody = await request.json() as Record<string, unknown>;
       return Response.json({ success: true, task_id: createBody.task_id });
+    }
+    if (url.pathname === "/api/gui-gua/sse") {
+      return new Response("id: 1\ndata: {\"chunk\":\"{\\\"answer\\\":\\\"ok\\\"}\"}\n\nevent: result\nid: 2\ndata: {\"result\":{\"answer\":\"ok\"}}\n\nid: 2\ndata: [DONE]\n\n", {
+        headers: { "Content-Type": "text/event-stream" },
+      });
     }
     return new Response("not found", { status: 404 });
   },
@@ -45,5 +52,24 @@ describe("CLI 请求映射", () => {
     expect(createBody.sub_report_type).toBe("liuyue");
     expect(createBody.target_liunian).toBe(2026);
     expect(createBody.target_liuyue).toBe(8);
+  });
+
+  test("参数错误在 JSON 模式下返回稳定错误", async () => {
+    const result = await cli("explain", "--report", "--json");
+    expect(result.exitCode).toBe(2);
+    expect(JSON.parse(result.stdout).error).toContain("--report 缺少值");
+    expect(result.stderr).not.toContain("Bun v");
+  });
+
+  test("查询同盘任务状态", async () => {
+    const result = await cli("reports", "status", "tp1", "--type", "tongpan", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ task_id: "tp1", status: "running" });
+  });
+
+  test("落卦非 JSON 模式只输出一次最终结果", async () => {
+    const result = await cli("luogua", "--question", "test");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ answer: "ok" });
   });
 });

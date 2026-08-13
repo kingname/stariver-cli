@@ -153,14 +153,19 @@ async function waitStandardReport(api: StariverApi, id: string): Promise<JsonObj
 
 async function waitTongpan(api: StariverApi, id: string): Promise<ReportRow> {
   while (true) {
-    const body = await api.json<JsonObject>("/api/tongpan/tasks");
-    const task = asArray<ReportRow>(body.data).find((item) => item.task_id === id);
-    if (!task) throw new Error("同盘任务不存在");
+    const task = await tongpanStatus(api, id);
     if (task.status === "completed") return task;
     if (task.status === "failed") throw new Error(String(task.error || "同盘报告生成失败"));
     console.error(`同盘 ${id} 状态：${task.status || "unknown"}，继续等待…`);
     await delay(5_000);
   }
+}
+
+async function tongpanStatus(api: StariverApi, id: string): Promise<ReportRow> {
+  const body = await api.json<JsonObject>("/api/tongpan/tasks");
+  const task = asArray<ReportRow>(body.data).find((item) => item.task_id === id);
+  if (!task) throw new Error("同盘任务不存在");
+  return task;
 }
 
 async function reportMarkdown(api: StariverApi, id: string, type = ""): Promise<string> {
@@ -237,7 +242,12 @@ async function commandReports(ctx: CommandContext, action: string): Promise<void
   }
   const id = stringFlag(ctx.args, "report") || ctx.args.positionals[2] || "";
   if (!id) throw new Error(`reports ${action} 需要报告 ID`);
-  if (action === "status") return output(await reportStatus(ctx.api, id), ctx.json);
+  if (action === "status") {
+    const status = stringFlag(ctx.args, "type") === "tongpan"
+      ? await tongpanStatus(ctx.api, id)
+      : await reportStatus(ctx.api, id);
+    return output(status, ctx.json);
+  }
   if (action === "wait") {
     const type = stringFlag(ctx.args, "type");
     const status = type === "tongpan" ? await waitTongpan(ctx.api, id) : await waitStandardReport(ctx.api, id);
@@ -273,7 +283,7 @@ async function commandTongpan(ctx: CommandContext): Promise<void> {
 
 type StreamResult = { content: string; history_id?: string; result?: unknown };
 
-async function streamRequest(ctx: CommandContext, path: string, body: JsonObject): Promise<StreamResult> {
+async function streamRequest(ctx: CommandContext, path: string, body: JsonObject, streamOutput = true): Promise<StreamResult> {
   const eventId = String(body.event_id || crypto.randomUUID());
   let lastEventId = String(body.last_event_id || "");
   let content = "";
@@ -283,7 +293,7 @@ async function streamRequest(ctx: CommandContext, path: string, body: JsonObject
     try {
       await ctx.api.sse(path, { ...body, event_id: eventId, last_event_id: lastEventId }, (event) => {
         if (event.data === "[DONE]") return;
-        if (event.id) lastEventId = event.id;
+        if (event.id && event.type !== "history" && event.type !== "result") lastEventId = event.id;
         let parsed: JsonObject = {};
         try { parsed = asObject(JSON.parse(event.data)); } catch { /* plain stream chunk */ }
         if (event.type === "history") {
@@ -299,10 +309,10 @@ async function streamRequest(ctx: CommandContext, path: string, body: JsonObject
         const chunk = eventChunk(event.data);
         if (chunk) {
           content += chunk;
-          if (!ctx.json) process.stdout.write(chunk);
+          if (!ctx.json && streamOutput) process.stdout.write(chunk);
         }
       });
-      if (!ctx.json && content && !content.endsWith("\n")) process.stdout.write("\n");
+      if (!ctx.json && streamOutput && content && !content.endsWith("\n")) process.stdout.write("\n");
       return { content, history_id: historyId || undefined, result };
     } catch (error) {
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) throw error;
@@ -382,7 +392,7 @@ async function commandMeihua(ctx: CommandContext): Promise<void> {
 
 async function commandLuogua(ctx: CommandContext): Promise<void> {
   const question = await required(stringFlag(ctx.args, "question"), "写下眼下最卡住的现实处境", ctx.json);
-  const result = await streamRequest(ctx, "/api/gui-gua/sse", { question, save_history: true });
+  const result = await streamRequest(ctx, "/api/gui-gua/sse", { question, save_history: true }, false);
   if (ctx.json) return output(result, true);
   if (result.result !== undefined) output(result.result, false);
   if (!result.history_id || !isInteractive(false)) return;
