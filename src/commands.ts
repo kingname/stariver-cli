@@ -185,15 +185,25 @@ async function createReport(ctx: CommandContext, reportType: "ziwei" | "bazi", s
     lang: "zh-CN",
   };
   if (reportType === "ziwei" && subType === "daxian") {
+    const result = await ctx.api.post<JsonObject>("/api/daxian_age_list", { ...birth, report_type: "ziwei", lang: "zh-CN" });
+    const daxianList = asArray<JsonObject>(result.data);
+    if (booleanFlag(ctx.args, "list")) return output({ daxian_age_list: daxianList }, ctx.json);
     const agesFlag = stringFlag(ctx.args, "ages");
     if (agesFlag) {
       const ages = agesFlag.split(",").map(Number);
       if (ages.length !== 2 || ages.some((value) => !Number.isInteger(value))) throw new Error("--ages 格式应为 起始虚岁,结束虚岁");
-      body.target_daxian_age = ages;
+      const selected = daxianList.find((item) => {
+        const range = asArray<number>(item.ageRange);
+        return range[0] === ages[0] && range[1] === ages[1];
+      });
+      if (!selected) {
+        const options = daxianList.map((item) => asArray<number>(item.ageRange).join(",")).filter(Boolean).join("；");
+        throw new Error(`--ages 必须选择根据出生信息生成的大限区间：${options || "暂无可选区间"}`);
+      }
+      body.target_daxian_age = selected.ageRange;
     } else {
-      if (!isInteractive(ctx.json)) throw new Error("大限报告需要 --ages 起始虚岁,结束虚岁");
-      const result = await ctx.api.post<JsonObject>("/api/daxian_age_list", { ...birth, report_type: "ziwei", lang: "zh-CN" });
-      const selected = await choose<JsonObject>("请选择大限", asArray<JsonObject>(result.data), (item) => {
+      if (!isInteractive(ctx.json)) throw new Error("大限报告需要先运行同一命令并加 --list，随后用 --ages 选择返回的起始虚岁,结束虚岁");
+      const selected = await choose<JsonObject>("请选择大限", daxianList, (item) => {
         const range = asArray<number>(item.ageRange);
         return `${range.join("-")}岁 · ${String(item.palaceName || "")}`;
       });
@@ -214,16 +224,31 @@ async function createReport(ctx: CommandContext, reportType: "ziwei" | "bazi", s
   }
   if (reportType === "ziwei" && subType === "feixing" && numberFlag(ctx.args, "year")) body.target_liunian = numberFlag(ctx.args, "year");
   if (reportType === "bazi" && subType === "dayun") {
+    const result = await ctx.api.post<JsonObject>("/api/dayun_year_list", { ...birth, report_type: "bazi", lang: "zh-CN" });
+    const dayunList = asArray<JsonObject>(result.dayun_info_list);
+    if (booleanFlag(ctx.args, "list")) return output({ dayun_info_list: dayunList }, ctx.json);
     const dayunFlag = stringFlag(ctx.args, "dayun");
     if (dayunFlag) {
-      const [yearStart, yearEnd] = dayunFlag.split(",").map(Number);
-      if (!yearStart || !yearEnd) throw new Error("--dayun 格式应为 起始年,结束年");
-      body.target_dayun_info = { year_start: yearStart, year_end: yearEnd, ganzhi: "" };
+      const years = dayunFlag.split(",").map(Number);
+      if (years.length !== 2 || years.some((value) => !Number.isInteger(value))) throw new Error("--dayun 格式应为 起始年,结束年");
+      const selected = dayunList.find((item) => item.year_start === years[0] && item.year_end === years[1]);
+      if (!selected) {
+        const options = dayunList.map((item) => `${item.year_start},${item.year_end}`).join("；");
+        throw new Error(`--dayun 必须选择根据出生信息生成的大运区间：${options || "暂无可选区间"}`);
+      }
+      body.target_dayun_info = {
+        year_start: selected.year_start,
+        year_end: selected.year_end,
+        ganzhi: "",
+      };
     } else {
-      if (!isInteractive(ctx.json)) throw new Error("大运报告需要 --dayun 起始年,结束年");
-      const result = await ctx.api.post<JsonObject>("/api/dayun_year_list", { ...birth, report_type: "bazi", lang: "zh-CN" });
-      const selected = await choose<JsonObject>("请选择大运", asArray<JsonObject>(result.dayun_info_list), (item) => `${item.year_start}-${item.year_end} · ${item.ganzhi}`);
-      body.target_dayun_info = selected;
+      if (!isInteractive(ctx.json)) throw new Error("大运报告需要先运行同一命令并加 --list，随后用 --dayun 选择返回的起始年,结束年");
+      const selected = await choose<JsonObject>("请选择大运", dayunList, (item) => `${item.year_start}-${item.year_end} · ${item.ganzhi}`);
+      body.target_dayun_info = {
+        year_start: selected.year_start,
+        year_end: selected.year_end,
+        ganzhi: "",
+      };
     }
   }
   const created = await ctx.api.post<JsonObject>("/api/ziwei/create", body);
@@ -563,11 +588,16 @@ export const HELP = `渡星河 CLI
   --birthday YYYY-MM-DD --sex 男|女          直接输入出生信息
   --shichen 0-12                             使用真太阳时时辰
   --time HH:MM --city 城市                   使用城市钟表时间
+  --list                                     动态列出大限或大运候选，不创建报告
+  --ages 起始虚岁,结束虚岁                   选择 --list 返回的紫微大限
+  --dayun 起始年,结束年                      选择 --list 返回的八字大运
   --json                                     JSON 输出且不进行交互询问
   --no-wait                                  创建长任务后立即返回
 
 示例：
   stariver archives list
+  stariver ziwei daxian --person <id> --list --json
+  stariver bazi dayun --person <id> --list --json
   stariver ziwei liuyue --person <id> --year 2026 --month 8
   stariver explain --report <id> --question "今年适合换工作吗？"
 `;

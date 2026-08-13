@@ -10,6 +10,18 @@ const server = Bun.serve({
       return Response.json({ success: true, data: { persons: [{ person_id: "p1", name: "甲", birthday: "1990-01-01", shichen: 3, sex: "男" }] } });
     }
     if (url.pathname === "/api/report/query") return Response.json({ success: true, data: [] });
+    if (url.pathname === "/api/daxian_age_list") {
+      return Response.json({
+        success: true,
+        data: [{ palaceName: "命宫", ageRange: [4, 13], startYear: 1993, endYear: 2002 }],
+      });
+    }
+    if (url.pathname === "/api/dayun_year_list") {
+      return Response.json({
+        success: true,
+        dayun_info_list: [{ year_start: 1998, year_end: 2007, ganzhi: "甲子" }],
+      });
+    }
     if (url.pathname === "/api/tongpan/tasks") {
       return Response.json({ success: true, data: [{ task_id: "tp1", report_type: "tongpan", status: "running" }] });
     }
@@ -31,7 +43,7 @@ const server = Bun.serve({
       });
     }
     if (url.pathname === "/releases/latest") {
-      return Response.json({ tag_name: "v0.2.5", assets: [] });
+      return Response.json({ tag_name: "v0.2.6", assets: [] });
     }
     return new Response("not found", { status: 404 });
   },
@@ -71,6 +83,22 @@ describe("CLI 请求映射", () => {
     expect(createBody.target_liuyue).toBe(8);
   });
 
+  test("紫微大限只接受根据出生信息生成的区间", async () => {
+    const listed = await cli("ziwei", "daxian", "--birthday", "1990-01-01", "--sex", "男", "--shichen", "3", "--list", "--json");
+    expect(listed.exitCode).toBe(0);
+    expect(JSON.parse(listed.stdout).daxian_age_list[0].ageRange).toEqual([4, 13]);
+
+    const rejected = await cli("ziwei", "daxian", "--birthday", "1990-01-01", "--sex", "男", "--shichen", "3", "--ages", "1,10", "--no-wait", "--json");
+    expect(rejected.exitCode).toBe(2);
+    expect(JSON.parse(rejected.stdout).error).toContain("4,13");
+  });
+
+  test("八字大运只使用动态候选中的区间", async () => {
+    const result = await cli("bazi", "dayun", "--birthday", "1990-01-01", "--sex", "男", "--shichen", "3", "--dayun", "1998,2007", "--no-wait", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(createBody.target_dayun_info).toEqual({ year_start: 1998, year_end: 2007, ganzhi: "" });
+  });
+
   test("参数错误在 JSON 模式下返回稳定错误", async () => {
     const result = await cli("explain", "--report", "--json");
     expect(result.exitCode).toBe(2);
@@ -101,6 +129,6 @@ describe("CLI 请求映射", () => {
   test("检查 CLI 与 skill 更新", async () => {
     const result = await cli("update", "--check", "--json");
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.5", latest_version: "0.2.5", release_tag: "v0.2.5" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.6", latest_version: "0.2.6", release_tag: "v0.2.6" });
   });
 });

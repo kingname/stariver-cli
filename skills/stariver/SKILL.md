@@ -22,9 +22,10 @@ Call `stariver` instead of reproducing API requests. Never read or print an exis
 3. When the user provides the new token, configure it with `stariver auth set-token --token <token> --json`, verify with `stariver auth status --json`, then continue the original request. Never echo, quote, save it outside the CLI config, or include it in the final response.
 4. Run `stariver archives list --json` when the user refers to a person by name but has not supplied a person ID.
 5. Run `stariver reports list --json` when a report ID is required. Match the requested person, system, period, and completed status; ask only if multiple plausible reports remain.
-6. Pass complete flags and `--json`. Do not rely on interactive prompts.
-7. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
-8. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
+6. Before creating 紫微大限 or 八字大运, run the same birth-based command with `--list --json`. These read-only calls dynamically derive the valid periods from the birthday, birth time, and sex. If the user named a target age or year, select the returned period containing it; otherwise ask the user to choose from the returned periods. Never invent or alter period boundaries.
+7. Pass complete flags and `--json`. Do not rely on interactive prompts.
+8. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
+9. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
 
 ## Command map
 
@@ -41,4 +42,4 @@ Call `stariver` instead of reproducing API requests. Never read or print an exis
 
 Use `--person <档案ID>` for birth-based reports. For direct birth data, pass `--birthday YYYY-MM-DD --sex 男|女` plus either `--shichen 0-12` or `--time HH:MM --city <城市>`.
 
-Pass `--ages <start,end>` for 紫微大限, `--year` for 流年, `--year --month` for 流月, and `--dayun <startYear,endYear>` for 八字大运. If the user has not chosen a valid 大限 or 大运 interval, run the command interactively or ask them to choose; never invent an interval.
+For 紫微大限, first run `stariver ziwei daxian <birth flags> --list --json`, then pass one returned `ageRange` as `--ages <start,end>`. For 八字大运, first run `stariver bazi dayun <birth flags> --list --json`, then pass one returned period as `--dayun <startYear,endYear>`. The CLI rejects intervals that were not generated from the same birth information. Pass `--year` for 流年 and `--year --month` for 流月.
