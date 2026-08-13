@@ -472,7 +472,10 @@ async function commandUpdate(ctx: CommandContext): Promise<void> {
   if (booleanFlag(ctx.args, "check")) {
     return output(ctx.json ? status : `发现新版本 ${status.latest_version}，运行 stariver update 即可更新。`, ctx.json);
   }
-  console.error(`发现新版本：CLI ${status.current_version} → ${status.latest_version}，正在更新 CLI 与 skill…`);
+  const updateTarget = status.cli_update_available
+    ? `CLI ${status.current_version} → ${status.latest_version} 与 skill`
+    : `skill ${status.latest_version}`;
+  console.error(`发现可用更新：${updateTarget}，正在安装…`);
   const installed = await installUpdate(status, ctx.json);
   const result = {
     ...status,
