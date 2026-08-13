@@ -7,6 +7,14 @@ description: Use the installed stariver CLI to work with 渡星河 Chinese metap
 
 Call `stariver` instead of reproducing API requests. Never read or print an existing stored token. Only ask for a new token when authentication setup is required.
 
+## 高成本报告确认
+
+生成任何新的紫微、八字或同盘报告前，必须向用户说明将要生成的具体报告，并取得用户对本次生成的明确确认。即使用户最初已经要求生成，也要在执行生成命令前二次确认。未收到肯定答复时停止，不得运行 `stariver ziwei ...`、`stariver bazi ...` 或 `stariver tongpan ...`。
+
+先查找是否已有符合人物、体系和时间范围的已完成报告。读取或解读已有报告无需确认；只有创建新报告需要确认。一次确认只适用于当次说明的报告，不要把其他操作的同意视为生成许可。
+
+例如，用户问“2026 年运势如何”时，先查找对应的 2026 流年报告。如果不存在，说明“当前没有对应的 2026 流年报告，生成报告成本较高。是否允许我现在生成？”然后等待用户回答；不可自行生成。
+
 ## Workflow
 
 1. Before the first authenticated command, run `stariver auth status --json`.
