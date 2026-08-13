@@ -13,6 +13,7 @@ export interface UpdateStatus {
   skill_update_available: boolean;
   update_available: boolean;
   skill_versions: Record<string, string | null>;
+  release_tag: string;
   installer_url?: string;
 }
 
@@ -49,7 +50,8 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
   });
   if (!response.ok) throw new Error(`检查更新失败（HTTP ${response.status}）`);
   const release = await response.json() as LatestRelease;
-  const latestVersion = normalizedVersion(release.tag_name || "");
+  const releaseTag = release.tag_name || "";
+  const latestVersion = normalizedVersion(releaseTag);
   if (!latestVersion) throw new Error("最新版本信息无效");
 
   const versions = Object.fromEntries(skillPaths().map(([name, path]) => [name, skillVersion(path)]));
@@ -68,6 +70,7 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
     skill_update_available: skillUpdate,
     update_available: cliUpdate || skillUpdate,
     skill_versions: versions,
+    release_tag: releaseTag,
     installer_url: installerUrl,
   };
 }
@@ -80,7 +83,7 @@ function executableDirectory(): string {
   return dirname(process.execPath);
 }
 
-async function runUnixInstaller(url: string, installDir: string, quiet: boolean): Promise<void> {
+async function runUnixInstaller(url: string, releaseTag: string, installDir: string, quiet: boolean): Promise<void> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`下载安装器失败（HTTP ${response.status}）`);
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "stariver-update-"));
@@ -89,7 +92,12 @@ async function runUnixInstaller(url: string, installDir: string, quiet: boolean)
     writeFileSync(scriptPath, await response.text(), "utf8");
     chmodSync(scriptPath, 0o700);
     const child = Bun.spawn(["sh", scriptPath], {
-      env: { ...process.env, STARIVER_SKIP_AUTH: "1", STARIVER_INSTALL_DIR: installDir },
+      env: {
+        ...process.env,
+        STARIVER_SKIP_AUTH: "1",
+        STARIVER_INSTALL_DIR: installDir,
+        STARIVER_RELEASE_TAG: releaseTag,
+      },
       stdin: "ignore",
       stdout: quiet ? "pipe" : "inherit",
       stderr: "pipe",
@@ -105,12 +113,13 @@ function escapePowerShell(value: string): string {
   return value.replaceAll("'", "''");
 }
 
-function startWindowsInstaller(url: string, installDir: string): void {
+function startWindowsInstaller(url: string, releaseTag: string, installDir: string): void {
   const command = [
     `$stariverProcessId=${process.pid}`,
     "Wait-Process -Id $stariverProcessId -ErrorAction SilentlyContinue",
     "$env:STARIVER_SKIP_AUTH='1'",
     `$env:STARIVER_INSTALL_DIR='${escapePowerShell(installDir)}'`,
+    `$env:STARIVER_RELEASE_TAG='${escapePowerShell(releaseTag)}'`,
     `Invoke-Expression (Invoke-RestMethod -Uri '${escapePowerShell(url)}')`,
   ].join("; ");
   const child = Bun.spawn(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], {
@@ -123,11 +132,12 @@ function startWindowsInstaller(url: string, installDir: string): void {
 
 export async function installUpdate(status: UpdateStatus, quiet: boolean): Promise<{ deferred: boolean }> {
   if (!status.installer_url) throw new Error("最新发行版缺少更新安装器");
+  if (!status.release_tag) throw new Error("最新发行版缺少版本标签");
   const installDir = executableDirectory();
   if (process.platform === "win32") {
-    startWindowsInstaller(status.installer_url, installDir);
+    startWindowsInstaller(status.installer_url, status.release_tag, installDir);
     return { deferred: true };
   }
-  await runUnixInstaller(status.installer_url, installDir, quiet);
+  await runUnixInstaller(status.installer_url, status.release_tag, installDir, quiet);
   return { deferred: false };
 }

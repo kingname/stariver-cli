@@ -5,6 +5,7 @@ REPOSITORY="kingname/stariver-cli"
 INSTALL_DIR="${STARIVER_INSTALL_DIR:-${HOME}/.local/bin}"
 TOKEN="${STARIVER_TOKEN:-}"
 SKIP_AUTH="${STARIVER_SKIP_AUTH:-}"
+RELEASE_TAG="${STARIVER_RELEASE_TAG:-latest}"
 
 if [ -z "$TOKEN" ] && [ "$SKIP_AUTH" != "1" ]; then
   echo "错误：安装命令缺少 STARIVER_TOKEN，请从渡星河网页复制完整命令。" >&2
@@ -29,7 +30,11 @@ if [ "$platform" = "linux" ] && (ldd --version 2>&1 || true) | grep -qi musl; th
   target="linux-${machine}-musl"
 fi
 artifact="stariver-${target}.tar.gz"
-base="https://github.com/${REPOSITORY}/releases/latest/download"
+if [ "$RELEASE_TAG" = "latest" ]; then
+  base="https://github.com/${REPOSITORY}/releases/latest/download"
+else
+  base="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}"
+fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 

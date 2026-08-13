@@ -3,12 +3,13 @@ $ErrorActionPreference = "Stop"
 $Repository = "kingname/stariver-cli"
 $Token = $env:STARIVER_TOKEN
 $SkipAuth = $env:STARIVER_SKIP_AUTH -eq "1"
+$ReleaseTag = if ($env:STARIVER_RELEASE_TAG) { $env:STARIVER_RELEASE_TAG } else { "latest" }
 if ([string]::IsNullOrWhiteSpace($Token) -and -not $SkipAuth) { throw "安装命令缺少 STARIVER_TOKEN，请从渡星河网页复制完整命令。" }
 $Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 if ($Arch -ne "x64") { throw "Windows 首版仅支持 x64，当前架构：$Arch" }
 
 $Artifact = "stariver-windows-x64.zip"
-$Base = "https://github.com/$Repository/releases/latest/download"
+$Base = if ($ReleaseTag -eq "latest") { "https://github.com/$Repository/releases/latest/download" } else { "https://github.com/$Repository/releases/download/$ReleaseTag" }
 $InstallDir = if ($env:STARIVER_INSTALL_DIR) { $env:STARIVER_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Stariver\bin" }
 $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("stariver-" + [guid]::NewGuid())
 
@@ -47,5 +48,6 @@ try {
 finally {
   Remove-Item Env:STARIVER_TOKEN -ErrorAction SilentlyContinue
   Remove-Item Env:STARIVER_SKIP_AUTH -ErrorAction SilentlyContinue
+  Remove-Item Env:STARIVER_RELEASE_TAG -ErrorAction SilentlyContinue
   Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -31,7 +31,7 @@ const server = Bun.serve({
       });
     }
     if (url.pathname === "/releases/latest") {
-      return Response.json({ tag_name: "v0.2.1", assets: [] });
+      return Response.json({ tag_name: "v0.2.2", assets: [] });
     }
     return new Response("not found", { status: 404 });
   },
@@ -101,6 +101,6 @@ describe("CLI 请求映射", () => {
   test("检查 CLI 与 skill 更新", async () => {
     const result = await cli("update", "--check", "--json");
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.1", latest_version: "0.2.1" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.2", latest_version: "0.2.2", release_tag: "v0.2.2" });
   });
 });
