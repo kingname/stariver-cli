@@ -458,7 +458,7 @@ export async function runCommand(ctx: CommandContext): Promise<void> {
   const [positionalCommand = "help", action = ""] = ctx.args.positionals;
   const command = booleanFlag(ctx.args, "version") ? "version" : positionalCommand;
   if (command === "help" || command === "--help") return output(HELP, false);
-  if (command === "version") return output("stariver 0.1.0", false);
+  if (command === "version") return output("stariver 0.1.1", false);
   if (command === "auth") return await commandAuth(ctx, action);
   if (command === "archives" && action === "list") {
     const persons = await listArchives(ctx.api);

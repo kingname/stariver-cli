@@ -26,7 +26,7 @@ for (const target of selected) {
       autoloadDotenv: false,
       autoloadBunfig: false,
       autoloadPackageJson: false,
-      ...(windows ? { windows: { title: "渡星河 CLI", publisher: "Stariver", version: "0.1.0.0", description: "渡星河命理 CLI" } } : {}),
+      ...(windows ? { windows: { title: "渡星河 CLI", publisher: "Stariver", version: "0.1.1.0", description: "渡星河命理 CLI" } } : {}),
     },
     minify: true,
   });
