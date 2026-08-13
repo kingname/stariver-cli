@@ -4,8 +4,9 @@ set -eu
 REPOSITORY="kingname/stariver-cli"
 INSTALL_DIR="${STARIVER_INSTALL_DIR:-${HOME}/.local/bin}"
 TOKEN="${STARIVER_TOKEN:-}"
+SKIP_AUTH="${STARIVER_SKIP_AUTH:-}"
 
-if [ -z "$TOKEN" ]; then
+if [ -z "$TOKEN" ] && [ "$SKIP_AUTH" != "1" ]; then
   echo "错误：安装命令缺少 STARIVER_TOKEN，请从渡星河网页复制完整命令。" >&2
   exit 1
 fi
@@ -51,7 +52,9 @@ mkdir -p "${HOME}/.codex/skills" "${HOME}/.claude/skills"
 rm -rf "${HOME}/.codex/skills/stariver" "${HOME}/.claude/skills/stariver"
 cp -R "${tmp}/skill/stariver" "${HOME}/.codex/skills/stariver"
 cp -R "${tmp}/skill/stariver" "${HOME}/.claude/skills/stariver"
-STARIVER_TOKEN="$TOKEN" "${INSTALL_DIR}/stariver" auth set-token --json >/dev/null
+if [ "$SKIP_AUTH" != "1" ]; then
+  STARIVER_TOKEN="$TOKEN" "${INSTALL_DIR}/stariver" auth set-token --json >/dev/null
+fi
 unset TOKEN STARIVER_TOKEN
 
 echo "渡星河 CLI 与 skill 已安装完成。"

@@ -1,6 +1,6 @@
 ---
 name: stariver
-description: Use the installed stariver CLI to work with 渡星河 Chinese metaphysics services. Trigger when the user asks to create or read 紫微斗数 natal, 大限, 流年, 流月 or 飞星 reports; 八字 natal, 大运 or 流年 reports; 同盘互参, 星河解盘, 双星映辉合盘, 梅花易数, 星河落卦 or 镜中人; or to list their Stariver archives and reports.
+description: Use the installed stariver CLI to work with 渡星河 Chinese metaphysics services. Trigger when the user asks to create or read 紫微斗数 natal, 大限, 流年, 流月 or 飞星 reports; 八字 natal, 大运 or 流年 reports; 同盘互参, 星河解盘, 双星映辉合盘, 梅花易数, 星河落卦, 镜中人 or 星河日签; to list their Stariver archives and reports; or to update the CLI and this skill.
 ---
 
 # 渡星河 CLI
@@ -25,6 +25,8 @@ Call `stariver` instead of reproducing API requests. Never read, print, or ask f
 - 梅花：`stariver meihua --question <问题> [--method time|number]`
 - 落卦：`stariver luogua --question <现实处境>`
 - 镜中人：`stariver mirror --report <ID> --question <问题> --mirror-type past|future`
+- 星河日签：`stariver daily-sign --report <紫微本命ID>`
+- 更新：`stariver update --json`
 
 Use `--person <档案ID>` for birth-based reports. For direct birth data, pass `--birthday YYYY-MM-DD --sex 男|女` plus either `--shichen 0-12` or `--time HH:MM --city <城市>`.
 

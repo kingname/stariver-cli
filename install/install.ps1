@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $Repository = "kingname/stariver-cli"
 $Token = $env:STARIVER_TOKEN
-if ([string]::IsNullOrWhiteSpace($Token)) { throw "安装命令缺少 STARIVER_TOKEN，请从渡星河网页复制完整命令。" }
+$SkipAuth = $env:STARIVER_SKIP_AUTH -eq "1"
+if ([string]::IsNullOrWhiteSpace($Token) -and -not $SkipAuth) { throw "安装命令缺少 STARIVER_TOKEN，请从渡星河网页复制完整命令。" }
 $Arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 if ($Arch -ne "x64") { throw "Windows 首版仅支持 x64，当前架构：$Arch" }
 
@@ -32,7 +33,9 @@ try {
   Copy-Item (Join-Path $TempDir "skill\stariver") $CodexSkill -Recurse
   Copy-Item (Join-Path $TempDir "skill\stariver") $ClaudeSkill -Recurse
 
-  & (Join-Path $InstallDir "stariver.exe") auth set-token --json | Out-Null
+  if (-not $SkipAuth) {
+    & (Join-Path $InstallDir "stariver.exe") auth set-token --json | Out-Null
+  }
   $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if ($null -eq $UserPath) { $UserPath = "" }
   if (($UserPath -split ";") -notcontains $InstallDir) {
@@ -43,5 +46,6 @@ try {
 }
 finally {
   Remove-Item Env:STARIVER_TOKEN -ErrorAction SilentlyContinue
+  Remove-Item Env:STARIVER_SKIP_AUTH -ErrorAction SilentlyContinue
   Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 }

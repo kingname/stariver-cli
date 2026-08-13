@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { VERSION } from "../src/version";
 
 const targets = [
   "bun-darwin-x64",
@@ -26,7 +27,7 @@ for (const target of selected) {
       autoloadDotenv: false,
       autoloadBunfig: false,
       autoloadPackageJson: false,
-      ...(windows ? { windows: { title: "渡星河 CLI", publisher: "Stariver", version: "0.1.1.0", description: "渡星河命理 CLI" } } : {}),
+      ...(windows ? { windows: { title: "渡星河 CLI", publisher: "Stariver", version: `${VERSION}.0`, description: "渡星河命理 CLI" } } : {}),
     },
     minify: true,
   });

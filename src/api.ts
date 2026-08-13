@@ -1,4 +1,5 @@
 import type { JsonObject, SseEvent } from "./types";
+import { VERSION } from "./version";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -28,7 +29,7 @@ export class StariverApi {
   private headers(extra?: HeadersInit): Headers {
     const headers = new Headers(extra);
     headers.set("Authorization", `Bearer ${this.token}`);
-    headers.set("User-Agent", "stariver-cli/0.1.1");
+    headers.set("User-Agent", `stariver-cli/${VERSION}`);
     headers.set("Referer", "https://stariver.me/");
     return headers;
   }

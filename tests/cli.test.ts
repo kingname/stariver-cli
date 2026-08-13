@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 let createBody: Record<string, unknown> = {};
+let dailySignBody: Record<string, unknown> = {};
 const server = Bun.serve({
   port: 0,
   async fetch(request) {
@@ -21,6 +22,17 @@ const server = Bun.serve({
         headers: { "Content-Type": "text/event-stream" },
       });
     }
+    if (url.pathname === "/api/daily/sign" && request.method === "POST") {
+      dailySignBody = await request.json() as Record<string, unknown>;
+      return Response.json({
+        success: true,
+        result: { main_star: "紫微", keyword: "稳", score: 88, dos: ["规划"], donts: ["急进"], advice: "稳步前行" },
+        today_lunar: { year: "丙午", month: "七月", day: "初一", shichen: "午时" },
+      });
+    }
+    if (url.pathname === "/releases/latest") {
+      return Response.json({ tag_name: "v0.2.0", assets: [] });
+    }
     return new Response("not found", { status: 404 });
   },
 });
@@ -30,7 +42,12 @@ afterAll(() => server.stop(true));
 async function cli(...args: string[]) {
   const child = Bun.spawn([process.execPath, "src/index.ts", ...args], {
     cwd: import.meta.dir.replace(/\/tests$/, ""),
-    env: { ...Bun.env, STARIVER_TOKEN: "test-token", STARIVER_API_URL: `http://127.0.0.1:${server.port}` },
+    env: {
+      ...Bun.env,
+      STARIVER_TOKEN: "test-token",
+      STARIVER_API_URL: `http://127.0.0.1:${server.port}`,
+      STARIVER_RELEASE_API_URL: `http://127.0.0.1:${server.port}/releases/latest`,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -71,5 +88,19 @@ describe("CLI 请求映射", () => {
     const result = await cli("luogua", "--question", "test");
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ answer: "ok" });
+  });
+
+  test("生成星河日签", async () => {
+    const result = await cli("daily-sign", "--report", "z1", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(dailySignBody.report_id).toBe("z1");
+    expect(typeof dailySignBody.task_id).toBe("string");
+    expect(JSON.parse(result.stdout).result.keyword).toBe("稳");
+  });
+
+  test("检查 CLI 与 skill 更新", async () => {
+    const result = await cli("update", "--check", "--json");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.0", latest_version: "0.2.0" });
   });
 });

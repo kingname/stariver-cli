@@ -4,6 +4,8 @@ import { ApiError, StariverApi } from "./api";
 import { clearConfig, configPath, loadConfig, saveConfig } from "./config";
 import { ask, choose, eventChunk, isInteractive, output } from "./ui";
 import type { ArchivePerson, BirthInput, JsonObject, ParsedArgs, ReportRow } from "./types";
+import { checkForUpdate, installUpdate } from "./update";
+import { VERSION } from "./version";
 
 type CommandContext = {
   args: ParsedArgs;
@@ -435,6 +437,53 @@ async function commandCombine(ctx: CommandContext): Promise<void> {
   }
 }
 
+async function commandDailySign(ctx: CommandContext): Promise<void> {
+  const report = await selectReport(
+    ctx,
+    "report",
+    true,
+    (row) => row.report_type === "ziwei" && row.sub_report_type === "main",
+  );
+  const taskId = crypto.randomUUID();
+  const created = await ctx.api.post<JsonObject>("/api/daily/sign", { report_id: report.task_id, task_id: taskId });
+  if (created.success === false) throw new Error(String(created.message || "星河日签生成失败"));
+  if (created.result) return output({ ...created, task_id: taskId, report_id: report.task_id }, ctx.json);
+  if (booleanFlag(ctx.args, "no-wait")) {
+    return output({ ...created, task_id: taskId, report_id: report.task_id }, ctx.json);
+  }
+
+  console.error(`日签任务已创建：${taskId}，正在生成…`);
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    await delay(3_000);
+    const result = await ctx.api.json<JsonObject>(query("/api/daily/sign", { task_id: taskId }));
+    if (result.success && result.result) {
+      return output({ ...result, task_id: taskId, report_id: report.task_id }, ctx.json);
+    }
+  }
+  throw new Error("星河日签生成超时，请稍后重试");
+}
+
+async function commandUpdate(ctx: CommandContext): Promise<void> {
+  const status = await checkForUpdate();
+  if (!status.update_available) {
+    return output(ctx.json ? status : `当前已是最新版本：${status.current_version}`, ctx.json);
+  }
+  if (booleanFlag(ctx.args, "check")) {
+    return output(ctx.json ? status : `发现新版本 ${status.latest_version}，运行 stariver update 即可更新。`, ctx.json);
+  }
+  console.error(`发现新版本：CLI ${status.current_version} → ${status.latest_version}，正在更新 CLI 与 skill…`);
+  const installed = await installUpdate(status, ctx.json);
+  const result = {
+    ...status,
+    success: true,
+    updated: !installed.deferred,
+    update_started: installed.deferred,
+    message: installed.deferred ? "更新将在当前进程退出后完成，请稍后重新打开终端" : "CLI 与 skill 已更新完成",
+  };
+  output(ctx.json ? result : result.message, ctx.json);
+}
+
 async function commandAuth(ctx: CommandContext, action: string): Promise<void> {
   if (action === "logout") {
     clearConfig();
@@ -458,7 +507,8 @@ export async function runCommand(ctx: CommandContext): Promise<void> {
   const [positionalCommand = "help", action = ""] = ctx.args.positionals;
   const command = booleanFlag(ctx.args, "version") ? "version" : positionalCommand;
   if (command === "help" || command === "--help") return output(HELP, false);
-  if (command === "version") return output("stariver 0.1.1", false);
+  if (command === "version") return output(`stariver ${VERSION}`, false);
+  if (command === "update") return await commandUpdate(ctx);
   if (command === "auth") return await commandAuth(ctx, action);
   if (command === "archives" && action === "list") {
     const persons = await listArchives(ctx.api);
@@ -483,6 +533,7 @@ export async function runCommand(ctx: CommandContext): Promise<void> {
   if (command === "meihua") return await commandMeihua(ctx);
   if (command === "luogua") return await commandLuogua(ctx);
   if (command === "mirror") return await commandMirror(ctx);
+  if (command === "daily-sign") return await commandDailySign(ctx);
   throw new Error(`未知命令：${command}\n\n${HELP}`);
 }
 
@@ -498,6 +549,8 @@ export const HELP = `渡星河 CLI
   meihua                                     梅花易数
   luogua                                     星河落卦
   mirror                                     镜中人
+  daily-sign                                 星河日签
+  update                                     更新 CLI 与 skill
   archives list                              列出档案
   reports list|status|wait|show              管理报告
   auth status|set-token|logout               管理登录凭据
