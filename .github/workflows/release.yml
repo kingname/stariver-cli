@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+      - run: bun run build
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release stage/skill
+          cp -R skills/stariver stage/skill/stariver
+          package_tar() {
+            source="$1"; artifact="$2"
+            rm -f stage/stariver stage/stariver.exe
+            cp "dist/$source" stage/stariver
+            tar -C stage -czf "release/$artifact" stariver skill
+          }
+          package_zip() {
+            source="$1"; artifact="$2"
+            rm -f stage/stariver stage/stariver.exe
+            cp "dist/$source" stage/stariver.exe
+            (cd stage && zip -qr "../release/$artifact" stariver.exe skill)
+          }
+          package_tar stariver-darwin-x64 stariver-darwin-x64.tar.gz
+          package_tar stariver-darwin-arm64 stariver-darwin-arm64.tar.gz
+          package_tar stariver-linux-x64-baseline stariver-linux-x64.tar.gz
+          package_tar stariver-linux-arm64 stariver-linux-arm64.tar.gz
+          package_tar stariver-linux-x64-musl stariver-linux-x64-musl.tar.gz
+          package_tar stariver-linux-arm64-musl stariver-linux-arm64-musl.tar.gz
+          package_zip stariver-windows-x64-baseline.exe stariver-windows-x64.zip
+          cp install/install.sh install/install.ps1 release/
+          (cd release && sha256sum stariver-* > checksums.txt)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

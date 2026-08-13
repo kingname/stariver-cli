@@ -1,0 +1,4 @@
+interface:
+  display_name: "渡星河 CLI"
+  short_description: "通过 stariver CLI 调用渡星河排盘、报告与问答能力"
+  default_prompt: "Use $stariver to list my reports and continue with the requested Stariver reading."
