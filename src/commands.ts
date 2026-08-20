@@ -41,15 +41,34 @@ async function listArchives(api: StariverApi): Promise<ArchivePerson[]> {
   return asArray<ArchivePerson>(asObject(body.data).persons);
 }
 
+function reportListRow(row: ReportRow): ReportRow {
+  return {
+    task_id: row.task_id,
+    report_type: row.report_type,
+    sub_report_type: row.sub_report_type,
+    status: row.status,
+    birthday: row.birthday,
+    shichen: row.shichen,
+    sex: row.sex,
+    comment: row.comment,
+    created_at: row.created_at,
+  };
+}
+
 async function listReports(api: StariverApi): Promise<ReportRow[]> {
   const standardBody = await api.json<unknown>("/api/report/query");
-  const standard = Array.isArray(standardBody)
+  const standardRows = Array.isArray(standardBody)
     ? standardBody as ReportRow[]
     : asArray<ReportRow>(asObject(standardBody).data);
+  const standard = standardRows.map(reportListRow);
   let tongpan: ReportRow[] = [];
   try {
     const body = await api.json<JsonObject>("/api/tongpan/tasks");
-    tongpan = asArray<ReportRow>(body.data).map((item) => ({ ...item, report_type: "tongpan", sub_report_type: "tongpan" }));
+    tongpan = asArray<ReportRow>(body.data).map((item) => reportListRow({
+      ...item,
+      report_type: "tongpan",
+      sub_report_type: "tongpan",
+    }));
   } catch {
     // 常规报告仍可使用，不让同盘列表故障阻断整个命令。
   }

@@ -10,7 +10,19 @@ const server = Bun.serve({
     if (url.pathname === "/api/archive/person/list") {
       return Response.json({ success: true, data: { persons: [{ person_id: "p1", name: "甲", birthday: "1990-01-01", shichen: 3, sex: "男" }] } });
     }
-    if (url.pathname === "/api/report/query") return Response.json({ success: true, data: [] });
+    if (url.pathname === "/api/report/query") {
+      return Response.json({
+        success: true,
+        data: [{
+          task_id: "z1",
+          report_type: "ziwei",
+          sub_report_type: "main",
+          status: "completed",
+          birthday: "1990-01-01",
+          result: "这段报告正文不应出现在列表中",
+        }],
+      });
+    }
     if (url.pathname === "/api/chat/history") {
       const sessionId = url.searchParams.get("session_id") || "explain-session";
       return Response.json({
@@ -76,7 +88,7 @@ const server = Bun.serve({
       });
     }
     if (url.pathname === "/releases/latest") {
-      return Response.json({ tag_name: "v0.2.7", assets: [] });
+      return Response.json({ tag_name: "v0.2.8", assets: [] });
     }
     return new Response("not found", { status: 404 });
   },
@@ -105,6 +117,14 @@ describe("CLI 请求映射", () => {
     const result = await cli("archives", "list", "--json");
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout).persons[0].person_id).toBe("p1");
+  });
+
+  test("报告列表只返回元数据", async () => {
+    const result = await cli("reports", "list", "--json");
+    expect(result.exitCode).toBe(0);
+    const reports = JSON.parse(result.stdout).reports;
+    expect(reports[0]).toMatchObject({ report_id: "z1", report_type: "ziwei", status: "completed" });
+    expect(result.stdout).not.toContain("报告正文");
   });
 
   test("紫微流月参数映射到现有创建接口", async () => {
@@ -182,6 +202,6 @@ describe("CLI 请求映射", () => {
   test("检查 CLI 与 skill 更新", async () => {
     const result = await cli("update", "--check", "--json");
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.7", latest_version: "0.2.7", release_tag: "v0.2.7" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.8", latest_version: "0.2.8", release_tag: "v0.2.8" });
   });
 });
