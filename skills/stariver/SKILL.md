@@ -22,10 +22,12 @@ Call `stariver` instead of reproducing API requests. Never read or print an exis
 3. When the user provides the new token, configure it with `stariver auth set-token --token <token> --json`, verify with `stariver auth status --json`, then continue the original request. Never echo, quote, save it outside the CLI config, or include it in the final response.
 4. Run `stariver archives list --json` when the user refers to a person by name but has not supplied a person ID.
 5. Run `stariver reports list --json` when a report ID is required. Match the requested person, system, period, and completed status; ask only if multiple plausible reports remain.
-6. Before creating 紫微大限 or 八字大运, run the same birth-based command with `--list --json`. These read-only calls dynamically derive the valid periods from the birthday, birth time, and sex. If the user named a target age or year, select the returned period containing it; otherwise ask the user to choose from the returned periods. Never invent or alter period boundaries.
-7. Pass complete flags and `--json`. Do not rely on interactive prompts.
-8. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
-9. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
+6. Distinguish generated reports from conversation history. Use `stariver reports ...` for saved 紫微、八字 and 同盘 report files identified by `report_id`; use `stariver history explain ...` or `stariver history combine ...` for saved question-and-answer sessions identified by `session_id`. When the user only says “历史记录”, infer from whether they want a report file or prior conversation, and ask only if the intent remains ambiguous.
+7. Before creating 紫微大限 or 八字大运, run the same birth-based command with `--list --json`. These read-only calls dynamically derive the valid periods from the birthday, birth time, and sex. If the user named a target age or year, select the returned period containing it; otherwise ask the user to choose from the returned periods. Never invent or alter period boundaries.
+8. Pass complete flags and `--json`. Do not rely on interactive prompts.
+9. For long report jobs, prefer `--no-wait`, return the task ID, then use `stariver reports wait <id> --json` and `stariver reports show <id> --json`. Add `--type tongpan` for 同盘 tasks.
+10. For 星河解盘 and 合盘, keep the returned `session_id`. If streaming fails or the visible output is incomplete, read the saved conversation with `stariver history explain show --session <ID> --json` or `stariver history combine show --session <ID> --json`.
+11. Report quota, validation, and authentication errors verbatim. Do not retry 4xx errors.
 
 ## Command map
 
@@ -34,6 +36,8 @@ Call `stariver` instead of reproducing API requests. Never read or print an exis
 - 同盘互参：`stariver tongpan --report <紫微ID> --report-2 <八字ID>`
 - 解盘：`stariver explain --report <ID> --question <问题>`
 - 合盘：`stariver combine --report <ID1> --report-2 <ID2> --combine-type love|business|relationship`
+- 解盘历史：`stariver history explain list --json`；`stariver history explain show --session <ID> --json`
+- 合盘历史：`stariver history combine list --json`；`stariver history combine show --session <ID> --json`
 - 梅花：`stariver meihua --question <问题> [--method time|number]`
 - 落卦：`stariver luogua --question <现实处境>`
 - 镜中人：`stariver mirror --report <ID> --question <问题> --mirror-type past|future`

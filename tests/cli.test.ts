@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 let createBody: Record<string, unknown> = {};
 let dailySignBody: Record<string, unknown> = {};
+let combineStreamAttempts = 0;
 const server = Bun.serve({
   port: 0,
   async fetch(request) {
@@ -10,6 +11,38 @@ const server = Bun.serve({
       return Response.json({ success: true, data: { persons: [{ person_id: "p1", name: "甲", birthday: "1990-01-01", shichen: 3, sex: "男" }] } });
     }
     if (url.pathname === "/api/report/query") return Response.json({ success: true, data: [] });
+    if (url.pathname === "/api/chat/history") {
+      const sessionId = url.searchParams.get("session_id") || "explain-session";
+      return Response.json({
+        success: true,
+        data: [{ _id: "h1", session_id: sessionId, report_id: "z1", question: "今年如何？", answer: "稳步推进。", created_at: "2026-08-20T08:00:00Z" }],
+        total: 1,
+      });
+    }
+    if (url.pathname === "/api/combine/sessions") {
+      return Response.json({
+        success: true,
+        data: [{ _id: "c1", session_id: "combine-session", name_1: "甲", name_2: "乙", combine_type: "love", created_at: "2026-08-20T08:00:00Z" }],
+        total: 1,
+      });
+    }
+    if (url.pathname === "/api/combine/history") {
+      return Response.json({
+        success: true,
+        data: [{ _id: "c1", session_id: url.searchParams.get("session_id"), question: "甲与乙的姻缘合盘", answer: "相处重在沟通。", created_at: "2026-08-20T08:00:00Z" }],
+      });
+    }
+    if (url.pathname === "/api/combine/sse") {
+      combineStreamAttempts += 1;
+      if (combineStreamAttempts <= 6) {
+        return new Response(`id: ${combineStreamAttempts}\ndata: {"chunk":"${combineStreamAttempts}"}\n\n`, {
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      return new Response("id: 7\ndata: {\"chunk\":\"完成\"}\n\nid: 8\ndata: [DONE]\n\n", {
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
     if (url.pathname === "/api/daxian_age_list") {
       return Response.json({
         success: true,
@@ -43,7 +76,7 @@ const server = Bun.serve({
       });
     }
     if (url.pathname === "/releases/latest") {
-      return Response.json({ tag_name: "v0.2.6", assets: [] });
+      return Response.json({ tag_name: "v0.2.7", assets: [] });
     }
     return new Response("not found", { status: 404 });
   },
@@ -126,9 +159,29 @@ describe("CLI 请求映射", () => {
     expect(JSON.parse(result.stdout).result.keyword).toBe("稳");
   });
 
+  test("读取解盘与合盘历史", async () => {
+    const explain = await cli("history", "explain", "show", "--session", "explain-session", "--json");
+    expect(explain.exitCode).toBe(0);
+    expect(JSON.parse(explain.stdout).data[0]).toMatchObject({ session_id: "explain-session", answer: "稳步推进。" });
+
+    const combine = await cli("history", "combine", "show", "--session", "combine-session", "--json");
+    expect(combine.exitCode).toBe(0);
+    expect(JSON.parse(combine.stdout).data[0]).toMatchObject({ session_id: "combine-session", answer: "相处重在沟通。" });
+  });
+
+  test("合盘流式连接连续中断后继续续传", async () => {
+    combineStreamAttempts = 0;
+    const result = await cli(
+      "combine", "--report", "z1", "--report-2", "z2", "--session", "retry-session", "--json",
+    );
+    expect(result.exitCode).toBe(0);
+    expect(combineStreamAttempts).toBe(7);
+    expect(JSON.parse(result.stdout).content).toBe("123456完成");
+  }, 10_000);
+
   test("检查 CLI 与 skill 更新", async () => {
     const result = await cli("update", "--check", "--json");
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.6", latest_version: "0.2.6", release_tag: "v0.2.6" });
+    expect(JSON.parse(result.stdout)).toMatchObject({ current_version: "0.2.7", latest_version: "0.2.7", release_tag: "v0.2.7" });
   });
 });

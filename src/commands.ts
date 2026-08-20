@@ -14,6 +14,7 @@ type CommandContext = {
 };
 
 const ACTIVE_STATUSES = new Set(["queued", "pending", "running", "processing", "created"]);
+const STREAM_MAX_RETRIES = 120;
 
 function query(path: string, params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
@@ -289,6 +290,54 @@ async function commandReports(ctx: CommandContext, action: string): Promise<void
   throw new Error("reports 支持 list、status、wait、show");
 }
 
+function historyTranscript(records: JsonObject[]): string {
+  return records.map((record) => `问：${String(record.question || "")}\n\n答：${String(record.answer || "")}`).join("\n\n---\n\n");
+}
+
+async function commandHistory(ctx: CommandContext, kind: string, requestedAction: string): Promise<void> {
+  if (kind !== "explain" && kind !== "combine") throw new Error("history 支持 explain 和 combine");
+  const sessionId = stringFlag(ctx.args, "session");
+  const action = requestedAction || (sessionId ? "show" : "list");
+  if (action !== "list" && action !== "show") throw new Error("history 支持 list 和 show");
+
+  if (kind === "combine") {
+    if (action === "list") {
+      const body = await ctx.api.json<JsonObject>(query("/api/combine/sessions", { cursor: stringFlag(ctx.args, "cursor") }));
+      if (ctx.json) return output(body, true);
+      asArray<JsonObject>(body.data).forEach((item) => {
+        console.log(`${item.session_id}\t${item.created_at || ""}\t${item.name_1 || "甲方"} × ${item.name_2 || "乙方"}\t${item.combine_type || ""}`);
+      });
+      return;
+    }
+    if (!sessionId) throw new Error("history combine show 需要 --session <会话ID>");
+    const body = await ctx.api.json<JsonObject>(query("/api/combine/history", { session_id: sessionId }));
+    return output(ctx.json ? body : historyTranscript(asArray<JsonObject>(body.data)), ctx.json);
+  }
+
+  if (action === "list") {
+    const body = await ctx.api.json<JsonObject>(query("/api/chat/history", {
+      report_id: "explain",
+      cursor: stringFlag(ctx.args, "cursor"),
+    }));
+    if (ctx.json) return output(body, true);
+    asArray<JsonObject>(body.data).forEach((item) => {
+      console.log(`${item.session_id || item.report_id}\t${item.created_at || ""}\t${item.question || ""}`);
+    });
+    return;
+  }
+  const reportId = stringFlag(ctx.args, "report");
+  if (!sessionId && !reportId) throw new Error("history explain show 需要 --session <会话ID>；旧记录可使用 --report <报告ID>");
+  const body = await ctx.api.json<JsonObject>(query("/api/chat/history", {
+    report_id: "explain",
+    session_id: sessionId,
+    filter_report_id: sessionId ? "" : reportId,
+  }));
+  const records = asArray<JsonObject>(body.data).sort((left, right) => {
+    return new Date(String(left.created_at || "")).getTime() - new Date(String(right.created_at || "")).getTime();
+  });
+  return output(ctx.json ? { ...body, data: records } : historyTranscript(records), ctx.json);
+}
+
 async function commandTongpan(ctx: CommandContext): Promise<void> {
   const available = await ctx.api.json<JsonObject>("/api/tongpan/reports");
   const ziwei = asArray<ReportRow>(available.ziwei_reports);
@@ -316,7 +365,7 @@ async function streamRequest(ctx: CommandContext, path: string, body: JsonObject
   let content = "";
   let historyId = "";
   let result: unknown;
-  for (let retry = 0; retry < 6; retry += 1) {
+  for (let retry = 0; retry < STREAM_MAX_RETRIES; retry += 1) {
     try {
       await ctx.api.sse(path, { ...body, event_id: eventId, last_event_id: lastEventId }, (event) => {
         if (event.data === "[DONE]") return;
@@ -343,7 +392,7 @@ async function streamRequest(ctx: CommandContext, path: string, body: JsonObject
       return { content, history_id: historyId || undefined, result };
     } catch (error) {
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) throw error;
-      if (retry === 5) throw error;
+      if (retry === STREAM_MAX_RETRIES - 1) throw error;
       console.error("流式连接中断，正在续传…");
       await delay(1_000);
     }
@@ -359,13 +408,19 @@ async function commandExplain(ctx: CommandContext): Promise<void> {
   let latest: StreamResult | undefined;
   while (question) {
     messages.push({ role: "user", content: question });
-    latest = await streamRequest(ctx, "/api/explain/sse", {
-      report_id: report.task_id,
-      report_type: "report_id",
-      messages,
-      model: stringFlag(ctx.args, "model") || "standard",
-      session_id: sessionId,
-    });
+    try {
+      latest = await streamRequest(ctx, "/api/explain/sse", {
+        report_id: report.task_id,
+        report_type: "report_id",
+        messages,
+        model: stringFlag(ctx.args, "model") || "standard",
+        session_id: sessionId,
+      });
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message}；解盘会话 ID：${sessionId}，可运行 stariver history explain show --session ${sessionId} --json 恢复已保存内容`);
+    }
     messages.push({ role: "model", content: latest.content });
     if (!isInteractive(ctx.json)) break;
     question = await ask("继续追问（直接回车退出）");
@@ -449,14 +504,27 @@ async function commandCombine(ctx: CommandContext): Promise<void> {
     name_2: stringFlag(ctx.args, "name-2") || "乙方",
     messages: [],
   };
-  let result = await streamRequest(ctx, "/api/combine/sse", baseBody);
+  let result: StreamResult;
+  try {
+    result = await streamRequest(ctx, "/api/combine/sse", baseBody);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}；合盘会话 ID：${sessionId}，可运行 stariver history combine show --session ${sessionId} --json 恢复已保存内容`);
+  }
   if (ctx.json) return output({ report_id_1: first.task_id, report_id_2: second.task_id, session_id: sessionId, ...result }, true);
   if (!isInteractive(false)) return;
   const messages: JsonObject[] = [{ role: "model", content: result.content }];
   let followup = await ask("继续追问（直接回车退出）");
   while (followup) {
     messages.push({ role: "user", content: followup });
-    result = await streamRequest(ctx, "/api/combine/sse", { ...baseBody, messages });
+    try {
+      result = await streamRequest(ctx, "/api/combine/sse", { ...baseBody, messages });
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message}；合盘会话 ID：${sessionId}，可运行 stariver history combine show --session ${sessionId} --json 恢复已保存内容`);
+    }
     messages.push({ role: "model", content: result.content });
     followup = await ask("继续追问（直接回车退出）");
   }
@@ -532,7 +600,7 @@ async function commandAuth(ctx: CommandContext, action: string): Promise<void> {
 }
 
 export async function runCommand(ctx: CommandContext): Promise<void> {
-  const [positionalCommand = "help", action = ""] = ctx.args.positionals;
+  const [positionalCommand = "help", action = "", subAction = ""] = ctx.args.positionals;
   const command = booleanFlag(ctx.args, "version") ? "version" : positionalCommand;
   if (command === "help" || command === "--help") return output(HELP, false);
   if (command === "version") return output(`stariver ${VERSION}`, false);
@@ -545,6 +613,7 @@ export async function runCommand(ctx: CommandContext): Promise<void> {
     return;
   }
   if (command === "reports") return await commandReports(ctx, action || "list");
+  if (command === "history") return await commandHistory(ctx, action, subAction);
   if (command === "ziwei") {
     const map: Record<string, string> = { natal: "main", daxian: "daxian", liunian: "liunian", liuyue: "liuyue", feixing: "feixing" };
     if (!map[action]) throw new Error("ziwei 支持 natal、daxian、liunian、liuyue、feixing");
@@ -581,6 +650,7 @@ export const HELP = `渡星河 CLI
   update                                     更新 CLI 与 skill
   archives list                              列出档案
   reports list|status|wait|show              管理报告
+  history explain|combine list|show          读取解盘与合盘历史
   auth status|set-token|logout               管理登录凭据
 
 通用参数：
@@ -600,4 +670,6 @@ export const HELP = `渡星河 CLI
   stariver bazi dayun --person <id> --list --json
   stariver ziwei liuyue --person <id> --year 2026 --month 8
   stariver explain --report <id> --question "今年适合换工作吗？"
+  stariver history explain show --session <id> --json
+  stariver history combine show --session <id> --json
 `;

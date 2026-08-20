@@ -4,7 +4,7 @@ const VALUE_FLAGS = new Set([
   "api-url", "token", "person", "birthday", "sex", "name", "shichen", "time", "city",
   "lng", "lat", "ages", "year", "month", "dayun", "report", "report-2", "report-type",
   "question", "mode", "method", "number1", "number2", "model", "session", "mirror-type",
-  "combine-type", "relationship", "name-1", "name-2", "type", "format",
+  "combine-type", "relationship", "name-1", "name-2", "type", "format", "cursor",
 ]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
